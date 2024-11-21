@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 import sys
 
 # Initialize pygame
@@ -7,62 +8,34 @@ pygame.init()
 
 # Screen dimensions
 WIDTH, HEIGHT = 800, 600
-
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0)
-
-# Set up the screen
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Plinko Game")
+pygame.display.set_caption("Slither.io Clone")
 clock = pygame.time.Clock()
 
-# Constants
-PEG_RADIUS = 5
-BALL_RADIUS = 10
-BIN_WIDTH = 80
+# Colors
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
 
-# Peg positions
-pegs = []
-for row in range(5):  # 5 rows of pegs
-    for col in range(10):  # 10 pegs per row
-        x = (col + 0.5 * (row % 2)) * (WIDTH // 10)
-        y = (row + 1) * 100
-        pegs.append((x, y))
+# Snake settings
+SNAKE_RADIUS = 10
+SNAKE_SPEED = 5
+snake_length = 5
+snake_body = [(WIDTH // 2, HEIGHT // 2)]
+direction = pygame.Vector2(1, 0)  # Initial direction: right
 
-# Bins at the bottom
-bins = [((i + 0.5) * BIN_WIDTH, HEIGHT - 20) for i in range(WIDTH // BIN_WIDTH)]
+# Food settings
+FOOD_RADIUS = 8
+food_position = (random.randint(0, WIDTH), random.randint(0, HEIGHT))
 
-# Ball
-class Ball:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.vx = 0
-        self.vy = 2
+# Score
+score = 0
 
-    def move(self):
-        self.vy += 0.1  # Simulate gravity
-        self.x += self.vx
-        self.y += self.vy
-
-        # Bounce off pegs
-        for peg_x, peg_y in pegs:
-            if (self.x - peg_x) ** 2 + (self.y - peg_y) ** 2 < (PEG_RADIUS + BALL_RADIUS) ** 2:
-                self.vx = random.uniform(-2, 2)
-                self.vy = -abs(self.vy)
-
-        # Stop at the bottom
-        if self.y > HEIGHT - BALL_RADIUS:
-            self.y = HEIGHT - BALL_RADIUS
-            self.vy = 0
-            self.vx = 0
-
-# Create the first ball
-balls = [Ball(WIDTH // 2, 50)]
+# Function to spawn food
+def spawn_food():
+    return (random.randint(FOOD_RADIUS, WIDTH - FOOD_RADIUS), 
+            random.randint(FOOD_RADIUS, HEIGHT - FOOD_RADIUS))
 
 # Main game loop
 running = True
@@ -73,27 +46,62 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Drop a new ball from the mouse position
-            x, y = pygame.mouse.get_pos()
-            balls.append(Ball(x, y))
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                if direction.y == 0:  # Prevent reversing
+                    direction = pygame.Vector2(0, -1)
+            elif event.key == pygame.K_DOWN:
+                if direction.y == 0:
+                    direction = pygame.Vector2(0, 1)
+            elif event.key == pygame.K_LEFT:
+                if direction.x == 0:
+                    direction = pygame.Vector2(-1, 0)
+            elif event.key == pygame.K_RIGHT:
+                if direction.x == 0:
+                    direction = pygame.Vector2(1, 0)
 
-    # Draw pegs
-    for peg_x, peg_y in pegs:
-        pygame.draw.circle(screen, WHITE, (int(peg_x), int(peg_y)), PEG_RADIUS)
+    # Move snake
+    head_x, head_y = snake_body[-1]
+    new_head = (head_x + direction.x * SNAKE_SPEED, head_y + direction.y * SNAKE_SPEED)
+    snake_body.append(new_head)
 
-    # Draw bins
-    for bin_x, bin_y in bins:
-        pygame.draw.rect(screen, BLUE, (bin_x - BIN_WIDTH // 2, bin_y, BIN_WIDTH, 20))
+    # Keep snake within the screen bounds
+    if new_head[0] < 0 or new_head[0] > WIDTH or new_head[1] < 0 or new_head[1] > HEIGHT:
+        print("Game Over! You hit the wall.")
+        running = False
 
-    # Update and draw balls
-    for ball in balls:
-        ball.move()
-        pygame.draw.circle(screen, YELLOW, (int(ball.x), int(ball.y)), BALL_RADIUS)
+    # Collision with self
+    if new_head in snake_body[:-1]:
+        print("Game Over! You hit yourself.")
+        running = False
 
-    # Update display
+    # Check if snake eats the food
+    dist = math.hypot(new_head[0] - food_position[0], new_head[1] - food_position[1])
+    if dist < SNAKE_RADIUS + FOOD_RADIUS:
+        food_position = spawn_food()
+        score += 1
+        snake_length += 1
+
+    # Keep the snake at the right length
+    if len(snake_body) > snake_length:
+        snake_body.pop(0)
+
+    # Draw food
+    pygame.draw.circle(screen, RED, (int(food_position[0]), int(food_position[1])), FOOD_RADIUS)
+
+    # Draw snake
+    for segment in snake_body:
+        pygame.draw.circle(screen, GREEN, (int(segment[0]), int(segment[1])), SNAKE_RADIUS)
+
+    # Draw score
+    font = pygame.font.SysFont(None, 36)
+    score_text = font.render(f"Score: {score}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+
+    # Update display and tick clock
     pygame.display.flip()
-    clock.tick(60)
+    clock.tick(30)  # Adjust to control speed
 
 pygame.quit()
 sys.exit()
+
